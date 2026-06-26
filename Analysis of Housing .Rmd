@@ -1,0 +1,165 @@
+---
+title: Predicting House Prices Using Multiple Linear Regression An Analysis of the King County Housing Dataset
+author: "Massogona cisse"
+date: "2025-12-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Introduction
+
+The real estate market in King County varies considerably in terms of property prices and characteristics, making it an interesting area for statistical analysis. The objective of this project is to understand which characteristics of a house (bedrooms, bathrooms, living space, number of floors, lot size, etc.) have the greatest influence on its sale price. By identifying the main predictive factors, we can provide useful information to buyers, sellers, and real estate analysts.
+
+The main research questions are: What are the characteristics of real estate that best predict house prices? To what extent does a multiple linear regression model explain the variation in prices? Are there signs of multicollinearity, outliers, or violations of regression assumptions that affect the interpretation of the model? The dataset used is from King County House Sales and contains over 21,000 observations with numerical and categorical variables describing house characteristics and sale prices. Missing values were removed prior to analysis. ( add a variables and defined which)
+
+```{r cars}
+
+houses<- read.csv("kc_house_data.csv" , stringsAsFactors = TRUE)
+houses<- na.omit(houses)
+
+```
+
+## 2. Results
+
+### 2.1 Summary Statistics/Visually Summarizing Data
+
+```{r }
+#| echo: false
+#| results: hide
+summary(houses$price)
+summary(houses$sqft_living)
+plot(houses$price~ houses$sqft_lot)
+plot(houses$price~ houses$sqft_living)
+hist(houses$price,xlab ="Sqft_living",ylab= "Price of house sold")
+```
+
+The summary of real estate prices shows that they vary considerably, with some very expensive houses driving up the maximum value, while most houses are moderately priced. The summary of living space shows that this also varies considerably, indicating a wide range of house sizes, which is likely to influence their price.
+
+The scatter plot representing price versus lot size (sqft_lot) shows a weak correlation, suggesting that larger lots do not systematically lead to higher prices. In contrast, the scatter plot representing price versus living space (sqft_living) shows a clear positive relationship, indicating that larger homes tend to sell at higher prices.
+
+The histogram of home prices is skewed to the right, meaning that most homes fall within a moderate price range, with fewer very expensive homes. Overall, these summaries and graphs suggest that living space is an important factor in predicting price, while lot size may have less impact.
+
+### 2.2 Fit Multiple Linear Regression Model
+
+```{r}
+#| results: hide
+fit <- lm(price ~ bedrooms+ bathrooms + sqft_living +floors+ sqft_lot,data =houses)
+summary(fit)
+
+
+```
+
+The coefficient for bedrooms (−59,530) indicates that each additional bedroom lowers the price when other variables remain constant, probably due to multicollinearity with living space. Bathrooms have a positive effect, increasing the price by approximately \$6,958 per additional bathroom. The number of floors and lot size have small negative effects and are not statistically significant. The overall F-test (F = 4474, p \< 0.01) shows that the model is statistically useful. The coefficient of determination (R² = 50.86%) indicates that the model explains about half of the variability in house prices. Overall, living space and bathrooms are the most important predictors in this regression model.
+
+### 2.3 Variable Selection
+
+```{r}
+#| results: hide
+library(leaps)
+both <- lm(price ~1, data = houses)
+out_Both <- step(both,
+                 scope =  ~ bedrooms + bathrooms + sqft_living + floors + 
+    sqft_lot,direction = "both")
+out_Both
+best <- regsubsets(price ~ bedrooms + bathrooms + sqft_living + floors + 
+    sqft_lot, data = houses)
+summary(best)$outmat
+summary(best)$bic
+which.min(summary(best)$bic)
+```
+
+  Stepwise regression was used to sort the variables and determine the best subset of predictors to explain real estate prices. The final model selected by the stepwise procedure included sqft_living, bedrooms, sqft_lot, and bathrooms. The first variable added to the model was sqft_living, confirming that living space is the strongest and most important predictor of real estate prices. The best Bayesian Information Criterion (BIC) value obtained was -15,315.64, indicating a good balance between model fit and complexity. The best two-variable model selected by the BIC included bedrooms and living space, showing that these two variables alone explain a large part of the variation in real estate prices. Overall, the results of the stepwise selection support the initial regression model and confirm that house size and interior features are the most influential factors in predicting price.
+
+
+
+### 2.4 Check Multicollinearity
+
+```{r}
+
+library(car)
+
+pairs(houses[, c( "sqft_living", "bedrooms","sqft_lot", "bathrooms")])
+
+vif(out_Both)
+```
+
+Multicollinearity was examined using a scatter plot matrix and variance inflation factors (VIF). The scatter plot matrix shows that sqft_living and bathrooms have a positive linear relationship, while the other predictors show weaker relationships. The VIF values for all variables were less than 10, indicating that there is no serious multicollinearity in the model. This means that the regression coefficients are stable and can be interpreted with confidence. Overall, the predictors are not strongly correlated with each other, so multicollinearity does not appear to be a major issue in this analysis.
+
+### 2.5 Residuals Analysis
+
+Perform and analysis of the residuals and comment on the results.
+
+```{r}
+#| echo: false
+#| results: hide
+par(mfrow = c(2,2))
+library(car)
+#constant
+plot(fit,1)
+#normality
+plot(fit,2)
+dim(houses)
+#outliers
+r <-rstandard(fit)
+which(abs(r)>3)
+outlierTest(fit)
+#leverage
+h <- hatvalues(fit)
+cutoff <- (12)/21613
+which(h>cutoff)
+#Influential observation
+d <- cooks.distance(fit)
+which(d>1)
+plot(fit,5)
+12/21613
+durbinWatsonTest(fit)
+
+```
+
+Residual analysis was conducted to check the regression assumptions. The Residuals vs Fitted plot shows a roughly random scatter, indicating that linearity is reasonable and variance is mostly constant, with only slight heteroscedasticity for large fitted values. The Normal Q–Q plot shows that residuals are approximately normal, with minor deviations at the extremes. Standardized residuals and OutlierTest identified a few extreme observations, and leverage and Cook’s distance revealed a few moderately influential points, but none excessively affect the model. The Durbin-Watson test indicates no significant autocorrelation (d = 1.98, p = 0.294). Overall, the model assumptions are largely satisfied, and the minor violations do not substantially affect the validity of the regression results.
+
+### 2.6 Price forecasting using Time Series Methods
+
+```{r}
+#| echo: false
+#| results: hide
+
+library(forecast)
+
+price_ts <- ts(houses$price)
+
+plot(price_ts)
+
+logPrice <- log(price_ts)
+
+fit <- auto.arima(logPrice)
+
+fit
+
+pred <- forecast(fit, h = 18)
+
+plot(pred)
+
+pred
+```
+
+The original house price time series showed considerable variability, with several extreme price values observed over time. After applying a logarithmic transformation, the variability was reduced, making the data more stable and more appropriate for time series modeling.
+
+The `auto.arima()` function selected an ARIMA(5,1,0) model for the logged house price series. This suggests that current house prices are influenced by several previous observations. The negative autoregressive coefficients indicate that increases in house prices are often followed by slight adjustments in later periods, reflecting short-term fluctuations rather than continuous growth.
+
+The forecast results indicate that the logged house prices are expected to remain relatively stable over the next 18 periods. The predicted values remain close to 12.8, suggesting that no strong upward or downward trend is expected during the forecast period.
+
+The forecast plot also includes prediction intervals that become wider over time. This indicates that the uncertainty of the predictions increases as the forecasting horizon becomes longer, which is common in time series analysis. Overall, the ARIMA model suggests that house prices are likely to remain relatively stable in the near future, although some variation is expected because future market conditions cannot be predicted with complete certainty.
+
+
+# 3.Discussion
+
+Regression analysis showed that living space and the number of bathrooms were the most important factors in predicting house prices, while bedrooms, floors, and lot size had weaker or negative effects. The overall regression model was statistically significant, and the (R^2) value of 50.86% indicated that the model explained about half of the variation in house prices. Progressive variable selection identified living space, bedrooms, bathrooms, and lot size as the best subset of predictors, with living space having the strongest influence on house prices. These results suggest that larger homes generally have higher prices, although other factors not included in the model may also affect housing values. Multicollinearity was not a concern because all VIF values were below 10. Residual diagnostics indicated that the assumptions of linearity, normality, and independence were generally satisfied, although a few outliers and slight heteroscedasticity were present.
+
+In addition, the time series analysis using the ARIMA(5,1,0) model suggested that future house prices are expected to remain relatively stable over the next 18 periods. The forecast did not show a strong increasing or decreasing trend, but the prediction intervals became wider over time, indicating greater uncertainty as the forecasting period increased.
+
+One limitation of this analysis is that only a small set of housing characteristics was included in the regression model. Other factors, such as neighborhood, location, home condition, and age of the property, may also influence house prices. In addition, the presence of extreme house prices and possible nonlinear relationships may have affected the model's performance. If this project were repeated, variable transformations, interaction terms, or more advanced regression and forecasting methods could be explored to improve prediction accuracy and better capture the relationships among the variables.
+
